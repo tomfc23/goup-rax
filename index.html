@@ -208,6 +208,44 @@
             word-break: break-all;
             margin-top: 10px;
         }
+
+        .api-settings {
+            display: flex;
+            gap: 15px;
+            margin: 15px 0;
+            flex-wrap: wrap;
+        }
+
+        .input-group {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #2c3e50;
+            font-weight: 500;
+        }
+
+        .input-field {
+            width: 100%;
+            padding: 8px 12px;
+            border: 2px solid rgba(52, 152, 219, 0.3);
+            border-radius: 5px;
+            font-size: 1em;
+            transition: border-color 0.3s ease;
+            background: white;
+        }
+
+        .input-field:focus {
+            outline: none;
+            border-color: #3498db;
+        }
+
+        select.input-field {
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -219,8 +257,21 @@
         
         <div class="controls">
             <div class="api-info">
-                <strong>API Endpoint:</strong>
-                <div class="api-url">http://api.real.vg/userpasses/DJ4YMO6v/passes?entityType=player&season=2025&sport=mlb</div>
+                <strong>API Configuration:</strong>
+                <div class="api-settings">
+                    <div class="input-group">
+                        <label for="userId">User ID:</label>
+                        <input type="text" id="userId" class="input-field" placeholder="Enter your User ID" value="DJ4YMO6v">
+                    </div>
+                    <div class="input-group">
+                        <label for="sportSelect">Sport:</label>
+                        <select id="sportSelect" class="input-field">
+                            <option value="mlb">MLB</option>
+                            <option value="wnba">WNBA</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="api-url" id="currentApiUrl"></div>
                 <small style="margin-top: 10px; display: block; opacity: 0.8;">
                     🌐 Using AllOrigins CORS proxy (allorigins.win) to bypass CORS restrictions
                 </small>
@@ -245,7 +296,29 @@
     <script>
         let currentData = null; // Stores the full fetched JSON data
 
+        function updateApiUrl() {
+            const userId = document.getElementById('userId').value;
+            const sport = document.getElementById('sportSelect').value;
+            const apiUrl = `http://api.real.vg/userpasses/${userId}/passes?entityType=player&season=2025&sport=${sport}`;
+            document.getElementById('currentApiUrl').textContent = apiUrl;
+            
+            // Update page title and header
+            const sportDisplay = sport.toUpperCase();
+            document.title = `${sportDisplay} Passes Data Scraper`;
+            document.querySelector('.header h1').textContent = `⚾ ${sportDisplay} Player Passes`;
+            document.querySelector('.header p').textContent = `Displaying player names and earnings from 2025 ${sportDisplay} season`;
+        }
+
         async function fetchData() {
+            const userId = document.getElementById('userId').value.trim();
+            if (!userId) {
+                const status = document.getElementById('status');
+                status.className = 'status error';
+                status.textContent = '❌ Please enter a User ID';
+                status.style.display = 'block';
+                return;
+            }
+
             const fetchBtn = document.getElementById('fetchBtn');
             const copyBtn = document.getElementById('copyBtn');
             const btnText = document.getElementById('btnText');
@@ -263,8 +336,8 @@
             dataContainer.style.display = 'none';
             
             try {
-                // UPDATED URL HERE
-                const apiUrl = 'http://api.real.vg/userpasses/DJ4YMO6v/passes?entityType=player&season=2025&sport=mlb';
+                const sport = document.getElementById('sportSelect').value;
+                const apiUrl = `http://api.real.vg/userpasses/${userId}/passes?entityType=player&season=2025&sport=${sport}`;
                 const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(apiUrl)}`;
                 const response = await fetch(proxyUrl);
                 
@@ -320,8 +393,11 @@
                 
                 data.passes.forEach((item, index) => {
                     const simplifiedItem = {
-                        displayName: item.entity?.displayName || item.label,
-                        earned: item.earned
+                        fullName: item.label,
+                        earned: item.earned,
+                        cost: item.cost,
+                        earningCap: item.earningCap,
+                        boost: item.boostInfo ? `${item.boostInfo.rarityLabel} (${item.boostInfo.multiplier})` : 'N/A'
                     };
                     const card = createDataCard(item.label, simplifiedItem);
                     dataGrid.appendChild(card);
@@ -352,7 +428,13 @@
             header.textContent = title;
             card.appendChild(header);
             
-            const fieldsToShow = ['displayName', 'earned'];
+            const fieldsToShow = [
+                'fullName',
+                'earned',
+                'cost',
+                'earningCap',
+                'boost'
+            ];
             
             if (typeof obj === 'object' && obj !== null) {
                 fieldsToShow.forEach(key => {
@@ -362,8 +444,13 @@
                         
                         const label = document.createElement('span');
                         label.className = 'data-label';
-                        label.textContent = key === 'displayName' ? 'Display Name:' : 'Earned:';
-                        
+                        label.textContent = {
+                            'fullName': 'Name:',
+                            'earned': 'Earnings:',
+                            'cost': 'Cost:',
+                            'earningCap': 'Cap:',
+                            'boost': 'Rarity:'
+                        }[key];
                         const valueSpan = document.createElement('span');
                         valueSpan.className = 'data-value';
                         valueSpan.textContent = obj[key] !== undefined && obj[key] !== null ? obj[key] : 'N/A';
@@ -404,11 +491,14 @@
                 return;
             }
 
-            let tableString = "Display Name\tEarned\n";
+            let tableString = "Name\tEarnings\tCost\tCap\tRarity\n";
             currentData.passes.forEach(player => {
-                const displayName = player.entity?.displayName || player.label || 'N/A';
+                const fullName = player.label || 'N/A';
                 const earned = player.earned !== undefined && player.earned !== null ? player.earned : 'N/A';
-                tableString += `${displayName}\t${earned}\n`;
+                const cost = player.cost !== undefined && player.cost !== null ? player.cost : 'N/A';
+                const earningCap = player.earningCap !== undefined && player.earningCap !== null ? player.earningCap : 'N/A';
+                const boost = player.boostInfo ? `${player.boostInfo.rarityLabel} (${player.boostInfo.multiplier})` : 'N/A';
+                tableString += `${fullName}\t${earned}\t${cost}\t${earningCap}\t${boost}\n`;
             });
 
             try {
@@ -424,8 +514,19 @@
             }
         }
 
-        // Auto-fetch data when page loads
+        // Setup event listeners and initialize
         window.addEventListener('load', () => {
+            const userId = document.getElementById('userId');
+            const sportSelect = document.getElementById('sportSelect');
+            
+            // Add event listeners for input changes
+            userId.addEventListener('input', updateApiUrl);
+            sportSelect.addEventListener('change', updateApiUrl);
+            
+            // Initialize the API URL display
+            updateApiUrl();
+            
+            // Auto-fetch data when page loads
             setTimeout(fetchData, 500);
         });
     </script>
