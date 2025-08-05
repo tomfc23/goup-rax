@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MLB Passes Data Scraper</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2c3e50, #3498db);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+
+        .controls {
+            padding: 30px;
+            background: rgba(52, 152, 219, 0.05);
+            border-bottom: 1px solid rgba(52, 152, 219, 0.1);
+            display: flex; /* Added for button alignment */
+            flex-wrap: wrap; /* Added for responsiveness */
+            gap: 10px; /* Space between buttons */
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 50px;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(52, 152, 219, 0.3);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(52, 152, 219, 0.4);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none; /* Reset box-shadow for disabled state */
+        }
+
+        .status {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 10px;
+            font-weight: 500;
+            width: 100%; /* Make status message take full width */
+        }
+
+        .status.loading {
+            background: rgba(255, 193, 7, 0.1);
+            color: #856404;
+            border: 1px solid rgba(255, 193, 7, 0.3);
+        }
+
+        .status.success {
+            background: rgba(40, 167, 69, 0.1);
+            color: #155724;
+            border: 1px solid rgba(40, 167, 69, 0.3);
+        }
+
+        .status.error {
+            background: rgba(220, 53, 69, 0.1);
+            color: #721c24;
+            border: 1px solid rgba(220, 53, 69, 0.3);
+        }
+
+        .data-container {
+            padding: 30px;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .data-grid {
+            display: grid;
+            gap: 20px;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        }
+
+        .data-card {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+            border: 1px solid rgba(52, 152, 219, 0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .data-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+        }
+
+        .data-card h3 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 8px;
+        }
+
+        .data-item {
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .data-label {
+            font-weight: 600;
+            color: #555;
+            margin-right: 10px;
+        }
+
+        .data-value {
+            color: #2c3e50;
+            font-family: 'Courier New', monospace;
+            background: rgba(52, 152, 219, 0.1);
+            padding: 4px 8px;
+            border-radius: 5px;
+            flex: 1;
+            text-align: right;
+        }
+
+        .raw-json {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            max-height: 400px;
+            overflow: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .api-info {
+            background: rgba(52, 152, 219, 0.1);
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border-left: 4px solid #3498db;
+            width: 100%; /* Make info take full width */
+        }
+
+        .api-url {
+            font-family: 'Courier New', monospace;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border-radius: 5px;
+            word-break: break-all;
+            margin-top: 10px;
+        }
+
+        .api-settings {
+            display: flex;
+            gap: 15px;
+            margin: 15px 0;
+            flex-wrap: wrap;
+        }
+
+        .input-group {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #2c3e50;
+            font-weight: 500;
+        }
+
+        .input-field {
+            width: 100%;
+            padding: 8px 12px;
+            border: 2px solid rgba(52, 152, 219, 0.3);
+            border-radius: 5px;
+            font-size: 1em;
+            transition: border-color 0.3s ease;
+            background: white;
+        }
+
+        .input-field:focus {
+            outline: none;
+            border-color: #3498db;
+        }
+
+        select.input-field {
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>⚾ MLB Player Passes</h1>
+            <p>Displaying player names and earnings from 2025 MLB season</p>
+        </div>
+        
+        <div class="controls">
+            <div class="api-info">
+                <strong>API Configuration:</strong>
+                <div class="api-settings">
+                    <div class="input-group">
+                        <label for="userId">User ID:</label>
+                        <input type="text" id="userId" class="input-field" placeholder="Enter your User ID" value="DJ4YMO6v">
+                    </div>
+                    <div class="input-group">
+                        <label for="sportSelect">Sport:</label>
+                        <select id="sportSelect" class="input-field">
+                            <option value="mlb">MLB</option>
+                            <option value="wnba">WNBA</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="api-url" id="currentApiUrl"></div>
+                <small style="margin-top: 10px; display: block; opacity: 0.8;">
+                    🌐 Using AllOrigins CORS proxy (allorigins.win) to bypass CORS restrictions
+                </small>
+            </div>
+            
+            <button id="fetchBtn" class="btn" onclick="fetchData()">
+                <span id="btnText">🔄 Fetch Data</span>
+            </button>
+            <button id="copyBtn" class="btn" onclick="copyTableToClipboard()" style="margin-left: 10px;" disabled>
+                📋 Copy to Clipboard
+            </button>
+            
+            <div id="status" class="status" style="display: none;"></div>
+        </div>
+        
+        <div id="dataContainer" class="data-container" style="display: none;">
+            <div id="dataGrid" class="data-grid"></div>
+            <div id="rawJson" class="raw-json" style="display: none;"></div>
+        </div>
+    </div>
+
+    <script>
+        let currentData = null; // Stores the full fetched JSON data
+
+        function updateApiUrl() {
+            const userId = document.getElementById('userId').value;
+            const sport = document.getElementById('sportSelect').value;
+            const apiUrl = `http://api.real.vg/userpasses/${userId}/passes?entityType=player&season=2025&sport=${sport}`;
+            document.getElementById('currentApiUrl').textContent = apiUrl;
+            
+            // Update page title and header
+            const sportDisplay = sport.toUpperCase();
+            document.title = `${sportDisplay} Passes Data Scraper`;
+            document.querySelector('.header h1').textContent = `⚾ ${sportDisplay} Player Passes`;
+            document.querySelector('.header p').textContent = `Displaying player names and earnings from 2025 ${sportDisplay} season`;
+        }
+
+        function extractLastName(fullName) {
+            if (!fullName || typeof fullName !== 'string') return '';
+            const parts = fullName.trim().split(' ');
+            return parts[parts.length - 1].toLowerCase();
+        }
+
+        function sortPlayersByLastName(players) {
+            return players.sort((a, b) => {
+                const lastNameA = extractLastName(a.label);
+                const lastNameB = extractLastName(b.label);
+                return lastNameA.localeCompare(lastNameB);
+            });
+        }
+
+        async function fetchData() {
+            const userId = document.getElementById('userId').value.trim();
+            if (!userId) {
+                const status = document.getElementById('status');
+                status.className = 'status error';
+                status.textContent = '❌ Please enter a User ID';
+                status.style.display = 'block';
+                return;
+            }
+
+            const fetchBtn = document.getElementById('fetchBtn');
+            const copyBtn = document.getElementById('copyBtn');
+            const btnText = document.getElementById('btnText');
+            const status = document.getElementById('status');
+            const dataContainer = document.getElementById('dataContainer');
+            const dataGrid = document.getElementById('dataGrid');
+            
+            // Update UI for loading state
+            fetchBtn.disabled = true;
+            copyBtn.disabled = true;
+            btnText.innerHTML = '<span class="loading-spinner"></span>Fetching...';
+            status.style.display = 'block';
+            status.className = 'status loading';
+            status.textContent = 'Fetching data from API...';
+            dataContainer.style.display = 'none';
+            
+            try {
+                const sport = document.getElementById('sportSelect').value;
+                const apiUrl = `http://api.real.vg/userpasses/${userId}/passes?entityType=player&season=2025&sport=${sport}`;
+                const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(apiUrl)}`;
+                const response = await fetch(proxyUrl);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const proxyData = await response.json();
+                
+                let data;
+                if (proxyData.contents) {
+                    try {
+                        data = JSON.parse(proxyData.contents);
+                    } catch (e) {
+                        data = proxyData.contents;
+                    }
+                } else {
+                    data = proxyData;
+                }
+                
+                currentData = data;
+                
+                status.className = 'status success';
+                status.textContent = `✅ Successfully fetched ${Array.isArray(data.passes) ? data.passes.length : 'data'} player passes (sorted alphabetically by last name).`;
+                
+                displayData(data);
+                dataContainer.style.display = 'block';
+                
+            } catch (error) {
+                console.error('Error fetching data:', error);
+                status.className = 'status error';
+                status.textContent = `❌ Error: ${error.message}. The API might be down or the CORS proxy might be experiencing issues.`;
+            } finally {
+                fetchBtn.disabled = false;
+                btnText.textContent = '🔄 Fetch Data';
+                if (currentData && Array.isArray(currentData.passes) && currentData.passes.length > 0) {
+                    copyBtn.disabled = false;
+                }
+            }
+        }
+
+        function displayData(data) {
+            const dataGrid = document.getElementById('dataGrid');
+            const rawJson = document.getElementById('rawJson');
+            
+            dataGrid.innerHTML = '';
+            
+            if (typeof data === 'object' && data !== null && Array.isArray(data.passes)) {
+                if (data.passes.length === 0) {
+                    dataGrid.innerHTML = '<div class="data-card"><h3>No Player Passes</h3><p>The API returned an empty list of passes.</p></div>';
+                    return;
+                }
+                
+                // Sort players alphabetically by last name
+                const sortedPasses = sortPlayersByLastName(data.passes);
+                
+                sortedPasses.forEach((item, index) => {
+                    const simplifiedItem = {
+                        fullName: item.label,
+                        earned: item.earned,
+                        cost: item.cost,
+                        earningCap: item.earningCap,
+                        boost: item.boostInfo ? `${item.boostInfo.rarityLabel} (${item.boostInfo.multiplier})` : 'N/A'
+                    };
+                    const card = createDataCard(item.label, simplifiedItem);
+                    dataGrid.appendChild(card);
+                });
+            } else {
+                dataGrid.innerHTML = `<div class="data-card"><h3>No Player Data Found</h3><p>Could not find 'passes' array in the response or response format is unexpected.</p></div>`;
+            }
+            
+            rawJson.textContent = JSON.stringify(data, null, 2);
+            rawJson.style.display = 'block';
+            
+            if (!document.getElementById('toggleJson')) {
+                const toggleBtn = document.createElement('button');
+                toggleBtn.id = 'toggleJson';
+                toggleBtn.className = 'btn';
+                toggleBtn.style.marginTop = '20px';
+                toggleBtn.textContent = 'Hide Raw JSON';
+                toggleBtn.onclick = toggleRawJson;
+                dataGrid.parentNode.insertBefore(toggleBtn, rawJson);
+            }
+        }
+
+        function createDataCard(title, obj) {
+            const card = document.createElement('div');
+            card.className = 'data-card';
+            
+            const header = document.createElement('h3');
+            header.textContent = title;
+            card.appendChild(header);
+            
+            const fieldsToShow = [
+                'fullName',
+                'earned',
+                'cost',
+                'earningCap',
+                'boost'
+            ];
+            
+            if (typeof obj === 'object' && obj !== null) {
+                fieldsToShow.forEach(key => {
+                    if (obj.hasOwnProperty(key)) {
+                        const item = document.createElement('div');
+                        item.className = 'data-item';
+                        
+                        const label = document.createElement('span');
+                        label.className = 'data-label';
+                        label.textContent = {
+                            'fullName': 'Name:',
+                            'earned': 'Earnings:',
+                            'cost': 'Cost:',
+                            'earningCap': 'Cap:',
+                            'boost': 'Rarity:'
+                        }[key];
+                        const valueSpan = document.createElement('span');
+                        valueSpan.className = 'data-value';
+                        valueSpan.textContent = obj[key] !== undefined && obj[key] !== null ? obj[key] : 'N/A';
+                        
+                        item.appendChild(label);
+                        item.appendChild(valueSpan);
+                        card.appendChild(item);
+                    }
+                });
+            } else {
+                const item = document.createElement('div');
+                item.className = 'data-item';
+                item.textContent = String(obj);
+                card.appendChild(item);
+            }
+            
+            return card;
+        }
+
+        function toggleRawJson() {
+            const rawJson = document.getElementById('rawJson');
+            const toggleBtn = document.getElementById('toggleJson');
+            
+            if (rawJson.style.display === 'none') {
+                rawJson.style.display = 'block';
+                toggleBtn.textContent = 'Hide Raw JSON';
+            } else {
+                rawJson.style.display = 'none';
+                toggleBtn.textContent = 'Show Raw JSON';
+            }
+        }
+
+        async function copyTableToClipboard() {
+            const status = document.getElementById('status');
+            if (!currentData || !Array.isArray(currentData.passes) || currentData.passes.length === 0) {
+                status.className = 'status error';
+                status.textContent = '❌ No data to copy. Please fetch data first.';
+                return;
+            }
+
+            // Sort the data before copying to clipboard
+            const sortedPasses = sortPlayersByLastName(currentData.passes);
+
+            let tableString = "Name\tEarnings\tCost\tCap\tRarity\n";
+            sortedPasses.forEach(player => {
+                const fullName = player.label || 'N/A';
+                const earned = player.earned !== undefined && player.earned !== null ? player.earned : 'N/A';
+                const cost = player.cost !== undefined && player.cost !== null ? player.cost : 'N/A';
+                const earningCap = player.earningCap !== undefined && player.earningCap !== null ? player.earningCap : 'N/A';
+                const boost = player.boostInfo ? `${player.boostInfo.rarityLabel} (${player.boostInfo.multiplier})` : 'N/A';
+                tableString += `${fullName}\t${earned}\t${cost}\t${earningCap}\t${boost}\n`;
+            });
+
+            try {
+                await navigator.clipboard.writeText(tableString);
+                status.className = 'status success';
+                status.textContent = '✅ Player data copied to clipboard as a table (sorted alphabetically by last name)!';
+            } catch (err) {
+                console.error('Failed to copy: ', err);
+                status.className = 'status error';
+                status.textContent = '❌ Failed to copy data to clipboard. Please check browser permissions.';
+            } finally {
+                 status.style.display = 'block';
+            }
+        }
+
+        // Setup event listeners and initialize
+        window.addEventListener('load', () => {
+            const userId = document.getElementById('userId');
+            const sportSelect = document.getElementById('sportSelect');
+            
+            // Add event listeners for input changes
+            userId.addEventListener('input', updateApiUrl);
+            sportSelect.addEventListener('change', updateApiUrl);
+            
+            // Initialize the API URL display
+            updateApiUrl();
+            
+            // Auto-fetch data when page loads
+            setTimeout(fetchData, 500);
+        });
+    </script>
+</body>
+</html>
